@@ -89,9 +89,9 @@ _REMOTE_REF_COLLISION_RE = re.compile(
 )
 _RELEASE_TAG_RE = re.compile(r'^v[0-9][0-9A-Za-z.+-]*$')
 _EXPERIMENTAL_RELEASE_TAG_RE = re.compile(r'^exp-v[0-9]+(?:\.[0-9]+)*$')
-_GITHUB_RELEASE_TAGS_URL = 'https://api.github.com/repos/m4tinbeigi-official/HermesBestUI/tags?per_page=100'
+_GITHUB_RELEASE_TAGS_URL = 'https://api.github.com/repos/m4tinbeigi-official/MrHermesUI/tags?per_page=100'
 _GITHUB_EXPERIMENTAL_REFS_URL = (
-    'https://api.github.com/repos/m4tinbeigi-official/HermesBestUI/'
+    'https://api.github.com/repos/m4tinbeigi-official/MrHermesUI/'
     'git/matching-refs/tags/exp-v?per_page=100'
 )
 _GITHUB_RELEASE_MAX_PAGES = 20
@@ -983,7 +983,7 @@ def _github_release_tags(
                     parsed.scheme == 'https'
                     and parsed.netloc == 'api.github.com'
                     and parsed.path == (
-                        '/repos/m4tinbeigi-official/HermesBestUI/'
+                        '/repos/m4tinbeigi-official/MrHermesUI/'
                         'git/matching-refs/tags/exp-v'
                     )
                 ):
@@ -1061,7 +1061,7 @@ def _check_webui_published_release_update(channel=DEFAULT_UPDATE_CHANNEL):
 
     current_ref = current.get('sha') or current_version
     latest_ref = latest.get('sha') or latest_version
-    repo_url = 'https://github.com/m4tinbeigi-official/HermesBestUI'
+    repo_url = 'https://github.com/m4tinbeigi-official/MrHermesUI'
     return {
         'name': 'webui',
         'behind': behind,

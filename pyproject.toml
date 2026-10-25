@@ -18,8 +18,8 @@ requires-python = ">=3.11"
 dynamic = ["version", "dependencies"]
 
 [project.urls]
-Repository = "https://github.com/m4tinbeigi-official/HermesBestUI"
-Issues = "https://github.com/m4tinbeigi-official/HermesBestUI/issues"
+Repository = "https://github.com/m4tinbeigi-official/MrHermesUI"
+Issues = "https://github.com/m4tinbeigi-official/MrHermesUI/issues"
 
 [project.scripts]
 # Packaged CLI entry point (#6739): `hermes-webui` starts the WebUI server, the

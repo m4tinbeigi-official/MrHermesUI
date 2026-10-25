@@ -477,7 +477,7 @@ def reboot_host_server() -> dict:
         # Step 2: Write reboot tracking marker
         reboot_meta = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "triggered_by": "HermesBestUI Web Interface",
+            "triggered_by": "MrHermesUI Web Interface",
             "autostart_verified": autostart_result.get("guaranteed", False),
             "configured_services": autostart_result.get("configured", []),
         }

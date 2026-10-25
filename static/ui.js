@@ -13108,7 +13108,7 @@ function _updateTargetArrowNamesTag(info,tag){
 function _formatManualUpdateInstruction(info){
   if(!(info&&info.no_git&&info.manual_update&&info.behind>0)) return null;
   const tag=info.channel==='experimental'?'experimental':'latest';
-  return t('settings_update_manual_docker',`docker pull ghcr.io/m4tinbeigi-official/HermesBestUI:${tag}`);
+  return t('settings_update_manual_docker',`docker pull ghcr.io/m4tinbeigi-official/MrHermesUI:${tag}`);
 }
 function _formatUpdateCheckError(label,info){
   if(!info||!info.error) return null;

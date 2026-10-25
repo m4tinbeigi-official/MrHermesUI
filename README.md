@@ -7,9 +7,9 @@
 
 # Mr Hermes
 
-[Mr Hermes](https://github.com/m4tinbeigi-official/HermesBestUI) — رابط کاربری پیشرفته، بومی‌سازی‌شده، کاملاً فارسی و راست‌چین برای عامل هوشمند مستر هرمس.
+[Mr Hermes](https://github.com/m4tinbeigi-official/MrHermesUI) — رابط کاربری پیشرفته، بومی‌سازی‌شده، کاملاً فارسی و راست‌چین برای عامل هوشمند مستر هرمس.
 
-- **مخزن رسمی پروژه و به‌روزرسانی:** [m4tinbeigi-official/HermesBestUI](https://github.com/m4tinbeigi-official/HermesBestUI)
+- **مخزن رسمی پروژه و به‌روزرسانی:** [m4tinbeigi-official/MrHermesUI](https://github.com/m4tinbeigi-official/MrHermesUI)
 - **پشتیبانی کامل RTL و فونت وزیرمتن**
 - **پوشه‌بندی و دسته‌بندی آکاردئونی گفتگوها**
 - **مدیریت اختصاصی امنیت و رمز عبور ورود**
@@ -126,8 +126,8 @@ ecosystem. See [docs/why-hermes.md](docs/why-hermes.md) for the full side-by-sid
 Run the repo bootstrap:
 
 ```bash
-git clone https://github.com/m4tinbeigi-official/HermesBestUI.git
-cd HermesBestUI
+git clone https://github.com/m4tinbeigi-official/MrHermesUI.git
+cd MrHermesUI
 ./ctl.sh start
 ```
 
