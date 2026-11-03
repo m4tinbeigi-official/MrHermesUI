@@ -5299,7 +5299,9 @@ function syncModelChip(){
   if(!S._bootReady){
     label.textContent='';
     if(mobileLabel) mobileLabel.textContent='';
+    const _tbL=$('titlebarModelLabel'); if(_tbL) _tbL.textContent='';
     chip.title='Conversation model';
+    const _tbC=$('titlebarModelChip'); if(_tbC) _tbC.title='Conversation model';
     return;
   }
   const opt=_selectedModelOption();
@@ -5336,8 +5338,14 @@ function syncModelChip(){
   const displayText=_formatGatewayModelLabel(fallbackModel,fallbackText,activeRouting)||fallbackText;
   label.textContent=displayText;
   if(mobileLabel) mobileLabel.textContent=displayText;
-  chip.title=activeRouting?`${fallbackModel||'Conversation model'} ${_gatewayRoutingLabel(activeRouting)}`:(fallbackModel||'Conversation model');
+  const titlebarLabel=$('titlebarModelLabel');
+  if(titlebarLabel) titlebarLabel.textContent=displayText||'انتخاب مدل';
+  const modelTitle=activeRouting?`${fallbackModel||'Conversation model'} ${_gatewayRoutingLabel(activeRouting)}`:(fallbackModel||'Conversation model');
+  chip.title=modelTitle;
+  const titlebarChip=$('titlebarModelChip');
+  if(titlebarChip) titlebarChip.title=modelTitle;
   chip.classList.toggle('active',!!(dd&&dd.classList.contains('open')));
+  if(titlebarChip) titlebarChip.classList.toggle('active',!!(dd&&dd.classList.contains('open')));
   if(mobileAction) mobileAction.classList.toggle('active',!!(dd&&dd.classList.contains('open')));
 }
 
@@ -5370,74 +5378,64 @@ function _restoreModelDropdownHome(){
   }
 }
 
-function _positionModelDropdown(){
+let _activeModelDropdownTrigger=null;
+
+function _positionModelDropdown(explicitAnchor){
   const dd=$('composerModelDropdown');
+  if(!dd) return;
   const chip=$('composerModelChip');
   const mobileAction=$('composerMobileModelAction');
-  const footer=document.querySelector('.composer-footer');
-  if(!dd||!footer) return;
-  const panel=$('composerMobileConfigPanel');
-  const anchor=(panel&&panel.classList.contains('open')&&mobileAction)?mobileAction:(chip&&chip.offsetParent?chip:mobileAction);
+  const titlebarChip=$('titlebarModelChip');
+  const anchor=explicitAnchor || _activeModelDropdownTrigger || (titlebarChip && titlebarChip.classList.contains('active') ? titlebarChip : (chip && chip.offsetParent ? chip : mobileAction));
   if(!anchor) return;
-  const isPhone=typeof window.matchMedia==='function'&&window.matchMedia('(max-width:640px)').matches;
-  if(isPhone){
-    // #6080: .composer-footer sets container-type:inline-size (and a
-    // backdrop-filter under the Geist Contrast skin) — both establish a fixed
-    // containing block, so a position:fixed dropdown left inside the footer
-    // resolves against the FOOTER (bottom of screen) instead of the viewport
-    // and lands below the fold. Reparent to <body> — exactly the working
-    // #profileDropdown idiom — so position:fixed is viewport-relative on ALL
-    // skins, then compute coordinates against the visual viewport.
-    if(!_modelDropdownHome){
-      _modelDropdownHome={parent:dd.parentNode,nextSibling:dd.nextSibling};
-    }
-    if(dd.parentNode!==document.body) document.body.appendChild(dd);
-    dd.classList.add('model-dropdown--floating');
-    const anchorRect=anchor.getBoundingClientRect();
-    const visualViewport=window.visualViewport;
-    const viewportWidth=Math.max(1,Number(visualViewport&&visualViewport.width)||window.innerWidth||1);
-    const viewportHeight=Math.max(1,Number(visualViewport&&visualViewport.height)||window.innerHeight||1);
-    const viewportTop=Math.max(0,Number(visualViewport&&visualViewport.offsetTop)||0);
-    const viewportBottom=viewportTop+viewportHeight;
-    const margin=8;
-    const gap=6;
-    const viewportLeft=Math.max(0,Number(visualViewport&&visualViewport.offsetLeft)||0);
-    const viewportRight=viewportLeft+viewportWidth;
-    const titlebar=document.querySelector('.app-titlebar');
-    const titlebarBottom=titlebar&&typeof titlebar.getBoundingClientRect==='function'
-      ? Number(titlebar.getBoundingClientRect().bottom)||0
-      : 0;
-    const contentTop=Math.max(viewportTop+margin,titlebarBottom+margin);
-    const menuWidth=Math.max(1,viewportWidth-margin*2);
-    const left=Math.max(viewportLeft+margin,Math.min(anchorRect.left,viewportRight-menuWidth-margin));
-    dd.style.left=`${left}px`;
-    dd.style.width=`${menuWidth}px`;
-    dd.style.maxWidth=`${menuWidth}px`;
-    dd.style.bottom='auto';
-    const menuHeight=Math.max(dd.scrollHeight,dd.offsetHeight);
-    const aboveSpace=Math.max(0,anchorRect.top-contentTop-gap-margin);
-    const belowSpace=Math.max(0,viewportBottom-anchorRect.bottom-gap-margin);
-    const openAbove=aboveSpace>=Math.min(menuHeight,belowSpace)||aboveSpace>=belowSpace;
-    const availableHeight=Math.max(1,openAbove?aboveSpace:belowSpace);
-    dd.style.maxHeight=`${availableHeight}px`;
-    const visibleHeight=Math.min(menuHeight||availableHeight,availableHeight);
-    const top=openAbove
-      ? anchorRect.top-gap-visibleHeight
-      : anchorRect.bottom+gap;
-    dd.style.top=`${Math.max(contentTop,Math.min(top,viewportBottom-margin-visibleHeight))}px`;
-    return;
+
+  // Always reparent to <body> when open so it escapes container queries, overflow:hidden, and weird scroll parents
+  if(!_modelDropdownHome){
+    _modelDropdownHome={parent:dd.parentNode,nextSibling:dd.nextSibling};
   }
-  // Desktop (>640px): keep the current master behaviour — an absolutely
-  // positioned .composer-footer child. Restore the element into the footer (in
-  // case a prior phone open moved it to <body>) and clear the phone inline
-  // styles so the desktop CSS anchor is byte-for-byte identical to master.
-  _restoreModelDropdownHome();
+  if(dd.parentNode!==document.body) document.body.appendChild(dd);
+  dd.classList.add('model-dropdown--floating');
+
   const anchorRect=anchor.getBoundingClientRect();
-  const footerRect=footer.getBoundingClientRect();
-  let left=anchorRect.left-footerRect.left;
-  const maxLeft=Math.max(0, footer.clientWidth-dd.offsetWidth);
-  left=Math.max(0, Math.min(left, maxLeft));
+  const isTopAnchor=(anchor===titlebarChip) || (anchorRect.top < 120);
+  const isRtl=(document.documentElement.dir==='rtl') || (document.body.dir==='rtl');
+  const margin=10;
+  const gap=6;
+  const viewportWidth=Math.max(1, window.innerWidth||1000);
+  const viewportHeight=Math.max(1, window.innerHeight||800);
+  const menuWidth=Math.min(460, Math.max(320, viewportWidth - margin*2));
+
+  dd.style.position='fixed';
+  dd.style.width=`${menuWidth}px`;
+  dd.style.maxWidth=`${viewportWidth - margin*2}px`;
+  dd.style.zIndex='1000';
+
+  // Compute horizontal alignment
+  let left;
+  if(isRtl){
+    left=anchorRect.right - menuWidth;
+  } else {
+    left=anchorRect.left;
+  }
+  left=Math.max(margin, Math.min(left, viewportWidth - menuWidth - margin));
   dd.style.left=`${left}px`;
+  dd.style.right='auto';
+
+  if(isTopAnchor){
+    // Position below titlebar
+    const top=anchorRect.bottom + gap;
+    const availH=Math.max(160, viewportHeight - top - margin);
+    dd.style.top=`${top}px`;
+    dd.style.bottom='auto';
+    dd.style.maxHeight=`${Math.min(availH, 620)}px`;
+  } else {
+    // Position above bottom composer
+    const bottom=viewportHeight - anchorRect.top + gap;
+    const availH=Math.max(160, anchorRect.top - gap - margin);
+    dd.style.bottom=`${bottom}px`;
+    dd.style.top='auto';
+    dd.style.maxHeight=`${Math.min(availH, 560)}px`;
+  }
 }
 
 function _readModelOverflowData(group){
@@ -6133,8 +6131,32 @@ function renderModelDropdown(){
     dd.innerHTML='';
     dd.appendChild(_scopeNote);
     dd.appendChild(_searchRow);
-    dd.appendChild(_custSep);
-    dd.appendChild(_custRow);
+
+    // Quick favorites bar for 1-click model switching
+    const _quickBar=document.createElement('div');
+    _quickBar.className='model-quick-bar';
+    const _quickModels=[
+      { id:'ag/gemini-3.8-flash-medium', name:'Gemini 3.8 Flash', prov:'custom:9router' },
+      { id:'ag/gemini-3.7-flash-medium', name:'Gemini 3.7 Flash', prov:'custom:9router' },
+      { id:'ag/claude-sonnet-4-6', name:'Claude Sonnet 4.6', prov:'custom:9router' },
+      { id:'ag/gemini-3.1-pro-high', name:'Gemini 3.1 Pro', prov:'custom:9router' },
+      { id:'ag/claude-opus-5-5', name:'Claude Opus 5.5', prov:'custom:9router' },
+      { id:'openai/gpt-5.4-mini', name:'GPT-5.4 Mini', prov:'openai' }
+    ];
+    for(const _qm of _quickModels){
+      const _pill=document.createElement('button');
+      _pill.type='button';
+      const _curVal=String(sel.value||'');
+      const _isActive=_curVal===_qm.id||_curVal.endsWith(':'+_qm.id)||(_curVal.includes(_qm.id));
+      _pill.className='model-quick-pill'+(_isActive?' active':'');
+      _pill.innerHTML=`<span class="model-quick-pill-dot"></span><span>${_qm.name}</span>`;
+      _pill.onclick=(e)=>{
+        e.stopPropagation();
+        selectFromDropdown(_qm.id,_qm.prov);
+      };
+      _quickBar.appendChild(_pill);
+    }
+    dd.appendChild(_quickBar);
     if(configuredModels.length){
       const configuredHeading=document.createElement('div');
       configuredHeading.className='model-group';
@@ -6308,6 +6330,10 @@ function renderModelDropdown(){
       noResult.style.textAlign='center';
       dd.appendChild(noResult);
     }
+    if(!term){
+      dd.appendChild(_custSep);
+      dd.appendChild(_custRow);
+    }
     if(_autoFocusSearch||_hadFocus) _si.focus();
   };
   _si.addEventListener('input',()=>_filterModels(_si.value));
@@ -6351,10 +6377,6 @@ function renderModelDropdown(){
   _cb.onclick=_applyCustom;
   _ci.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();_applyCustom();}if(e.key==='Escape'){closeDropdown();}});
   _ci.addEventListener('click',e=>e.stopPropagation());
-  dd.appendChild(_scopeNote);
-  dd.appendChild(_searchRow);
-  dd.appendChild(_custSep);
-  dd.appendChild(_custRow);
   _filterModels('');
 }
 
@@ -6409,13 +6431,18 @@ function _nudgeModelRowBelowStickyStack(dd,row){
   const top=row.getBoundingClientRect().top;
   if(top<stack) dd.scrollTop-=Math.ceil(stack-top);
 }
-async function toggleModelDropdown(){
+async function toggleModelDropdown(e, triggerEl){
+  if(e && typeof e.stopPropagation==='function') e.stopPropagation();
   const dd=$('composerModelDropdown');
   const chip=$('composerModelChip');
+  const titlebarChip=$('titlebarModelChip');
   const sel=$('modelSelect');
-  if(!dd||!chip||!sel) return;
+  if(!dd||!sel) return;
   const open=dd.classList.contains('open');
   if(open){closeModelDropdown(); return;}
+  
+  _activeModelDropdownTrigger = triggerEl || (e && e.currentTarget) || (chip && chip.offsetParent ? chip : titlebarChip);
+
   if(typeof closeProfileDropdown==='function') closeProfileDropdown();
   if(typeof closeWsDropdown==='function') closeWsDropdown();
   if(typeof closeReasoningDropdown==='function') closeReasoningDropdown();
@@ -6427,12 +6454,11 @@ async function toggleModelDropdown(){
   if(dd.classList.contains('open')) return;
   renderModelDropdown();
   dd.classList.add('open');
-  _positionModelDropdown();
+  _positionModelDropdown(_activeModelDropdownTrigger);
   _syncModelDropdownStickyInsets(dd);
-  const activeRow=dd.querySelector('.model-opt.active');
-  if(activeRow&&typeof activeRow.scrollIntoView==='function') activeRow.scrollIntoView({block:'center'});
-  _nudgeModelRowBelowStickyStack(dd,activeRow);
-  chip.classList.add('active');
+  dd.scrollTop=0;
+  if(chip) chip.classList.add('active');
+  if(titlebarChip) titlebarChip.classList.add('active');
   const mobileAction=$('composerMobileModelAction');
   if(mobileAction) mobileAction.classList.add('active');
 }
@@ -6440,10 +6466,13 @@ async function toggleModelDropdown(){
 function closeModelDropdown(){
   const dd=$('composerModelDropdown');
   const chip=$('composerModelChip');
+  const titlebarChip=$('titlebarModelChip');
   const mobileAction=$('composerMobileModelAction');
   if(dd) dd.classList.remove('open');
   if(chip) chip.classList.remove('active');
+  if(titlebarChip) titlebarChip.classList.remove('active');
   if(mobileAction) mobileAction.classList.remove('active');
+  _activeModelDropdownTrigger=null;
   // If the phone path reparented the menu onto <body>, put it back in the
   // footer and clear the fixed-position inline styles so the DOM returns to its
   // baseline shape and the next desktop open anchors correctly (#6080).
@@ -6549,6 +6578,7 @@ function mountSettingsModelPicker(){
 document.addEventListener('click',e=>{
   if(
     !e.target.closest('#composerModelChip') &&
+    !e.target.closest('#titlebarModelChip') &&
     !e.target.closest('#composerMobileModelAction') &&
     !e.target.closest('#composerModelDropdown')
   ) closeModelDropdown();

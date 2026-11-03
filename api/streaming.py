@@ -15635,6 +15635,10 @@ def _run_agent_streaming(
                         logger.debug("Failed to close identity-mismatched cached agent for session %s", session_id, exc_info=True)
 
                 if agent is not None:
+                    # Clear any stale streak on the cached agent when starting a new turn from WebUI
+                    if getattr(agent, "_consecutive_stale_streams", 0) > 0:
+                        agent._consecutive_stale_streams = 0
+
                     # Refresh volatile runtime credentials selected from provider
                     # pools without discarding cross-turn agent/provider state.
                     if not _refresh_cached_agent_runtime(agent, _agent_kwargs):
