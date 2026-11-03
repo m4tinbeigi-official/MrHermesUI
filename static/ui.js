@@ -5386,56 +5386,101 @@ function _positionModelDropdown(explicitAnchor){
   const chip=$('composerModelChip');
   const mobileAction=$('composerMobileModelAction');
   const titlebarChip=$('titlebarModelChip');
-  const anchor=explicitAnchor || _activeModelDropdownTrigger || (titlebarChip && titlebarChip.classList.contains('active') ? titlebarChip : (chip && chip.offsetParent ? chip : mobileAction));
+  const footer=document.querySelector('.composer-footer');
+  const panel=$('composerMobileConfigPanel');
+  const anchor=explicitAnchor || _activeModelDropdownTrigger || (panel&&panel.classList.contains('open')&&mobileAction?mobileAction:(chip&&chip.offsetParent?chip:mobileAction));
   if(!anchor) return;
 
-  // Always reparent to <body> when open so it escapes container queries, overflow:hidden, and weird scroll parents
-  if(!_modelDropdownHome){
-    _modelDropdownHome={parent:dd.parentNode,nextSibling:dd.nextSibling};
+  const isPhone=typeof window.matchMedia==='function'&&window.matchMedia('(max-width:640px)').matches;
+  const isTitlebar=Boolean(anchor===titlebarChip || (anchor&&anchor.classList&&anchor.classList.contains('app-titlebar-model-chip')) || (anchor&&anchor.id==='titlebarModelChip'));
+
+  if(isPhone || isTitlebar){
+    // #6080: .composer-footer sets container-type:inline-size (and a
+    // backdrop-filter under the Geist Contrast skin) — both establish a fixed
+    // containing block, so a position:fixed dropdown left inside the footer
+    // resolves against the FOOTER (bottom of screen) instead of the viewport
+    // and lands below the fold. Reparent to <body> — exactly the working
+    // #profileDropdown idiom — so position:fixed is viewport-relative on ALL
+    // skins, then compute coordinates against the visual viewport.
+    if(!_modelDropdownHome){
+      _modelDropdownHome={parent:dd.parentNode,nextSibling:dd.nextSibling};
+    }
+    if(dd.parentNode!==document.body) document.body.appendChild(dd);
+    dd.classList.add('model-dropdown--floating');
+
+    const anchorRect=anchor.getBoundingClientRect();
+    const visualViewport=window.visualViewport;
+    const viewportWidth=Math.max(1,Number(visualViewport&&visualViewport.width)||window.innerWidth||1);
+    const viewportHeight=Math.max(1,Number(visualViewport&&visualViewport.height)||window.innerHeight||1);
+    const viewportTop=Math.max(0,Number(visualViewport&&visualViewport.offsetTop)||0);
+    const viewportBottom=viewportTop+viewportHeight;
+    const margin=8;
+    const gap=6;
+    const viewportLeft=Math.max(0,Number(visualViewport&&visualViewport.offsetLeft)||0);
+    const viewportRight=viewportLeft+viewportWidth;
+    const titlebar=document.querySelector('.app-titlebar');
+    const titlebarBottom=titlebar&&typeof titlebar.getBoundingClientRect==='function'
+      ? Number(titlebar.getBoundingClientRect().bottom)||0
+      : 0;
+    const contentTop=Math.max(viewportTop+margin,titlebarBottom+margin);
+    const menuWidth=isPhone?Math.max(1,viewportWidth-margin*2):Math.min(460,Math.max(320,viewportWidth-margin*2));
+
+    const isRtl=Boolean(typeof document!=='undefined'&&((document.documentElement&&document.documentElement.dir==='rtl')||(document.body&&document.body.dir==='rtl')));
+    let left;
+    if(isRtl){
+      left=anchorRect.right-menuWidth;
+    } else {
+      left=anchorRect.left;
+    }
+    left=Math.max(viewportLeft+margin,Math.min(left,viewportRight-menuWidth-margin));
+    dd.style.left=`${left}px`;
+    dd.style.width=`${menuWidth}px`;
+    dd.style.maxWidth=`${menuWidth}px`;
+    dd.style.bottom='auto';
+
+    if(isTitlebar || anchorRect.top < 120){
+      const top=anchorRect.bottom+gap;
+      dd.style.maxHeight=`${Math.max(160, viewportBottom-top-margin)}px`;
+      dd.style.top=`${top}px`;
+    } else {
+      const menuHeight=Math.max(dd.scrollHeight,dd.offsetHeight);
+      const aboveSpace=Math.max(0,anchorRect.top-contentTop-gap-margin);
+      const belowSpace=Math.max(0,viewportBottom-anchorRect.bottom-gap-margin);
+      const openAbove=aboveSpace>=Math.min(menuHeight,belowSpace)||aboveSpace>=belowSpace;
+      const availableHeight=Math.max(1,openAbove?aboveSpace:belowSpace);
+      dd.style.maxHeight=`${availableHeight}px`;
+      const visibleHeight=Math.min(menuHeight||availableHeight,availableHeight);
+      const top=openAbove
+        ? anchorRect.top-gap-visibleHeight
+        : anchorRect.bottom+gap;
+      dd.style.top=`${Math.max(contentTop,Math.min(top,viewportBottom-margin-visibleHeight))}px`;
+    }
+    return;
   }
-  if(dd.parentNode!==document.body) document.body.appendChild(dd);
-  dd.classList.add('model-dropdown--floating');
 
+  // Desktop (>640px) inside composer: keep the current master behaviour — an absolutely
+  // positioned .composer-footer child. Restore the element into the footer (in
+  // case a prior phone open moved it to <body>) and clear the phone inline
+  // styles so the desktop CSS anchor is byte-for-byte identical to master.
+  _restoreModelDropdownHome();
+  if(!footer) return;
   const anchorRect=anchor.getBoundingClientRect();
-  const isTopAnchor=(anchor===titlebarChip) || (anchorRect.top < 120);
-  const isRtl=(document.documentElement.dir==='rtl') || (document.body.dir==='rtl');
-  const margin=10;
-  const gap=6;
-  const viewportWidth=Math.max(1, window.innerWidth||1000);
-  const viewportHeight=Math.max(1, window.innerHeight||800);
-  const menuWidth=Math.min(460, Math.max(320, viewportWidth - margin*2));
-
-  dd.style.position='fixed';
-  dd.style.width=`${menuWidth}px`;
-  dd.style.maxWidth=`${viewportWidth - margin*2}px`;
-  dd.style.zIndex='1000';
-
-  // Compute horizontal alignment
+  const footerRect=footer.getBoundingClientRect();
+  const isRtl=Boolean(typeof document!=='undefined'&&((document.documentElement&&document.documentElement.dir==='rtl')||(document.body&&document.body.dir==='rtl')));
   let left;
   if(isRtl){
-    left=anchorRect.right - menuWidth;
+    left=anchorRect.right-footerRect.left-dd.offsetWidth;
   } else {
-    left=anchorRect.left;
+    left=anchorRect.left-footerRect.left;
   }
-  left=Math.max(margin, Math.min(left, viewportWidth - menuWidth - margin));
+  const maxLeft=Math.max(0, footer.clientWidth-dd.offsetWidth);
+  left=Math.max(0, Math.min(left, maxLeft));
   dd.style.left=`${left}px`;
-  dd.style.right='auto';
-
-  if(isTopAnchor){
-    // Position below titlebar
-    const top=anchorRect.bottom + gap;
-    const availH=Math.max(160, viewportHeight - top - margin);
-    dd.style.top=`${top}px`;
-    dd.style.bottom='auto';
-    dd.style.maxHeight=`${Math.min(availH, 620)}px`;
-  } else {
-    // Position above bottom composer
-    const bottom=viewportHeight - anchorRect.top + gap;
-    const availH=Math.max(160, anchorRect.top - gap - margin);
-    dd.style.bottom=`${bottom}px`;
-    dd.style.top='auto';
-    dd.style.maxHeight=`${Math.min(availH, 560)}px`;
-  }
+  dd.style.top='';
+  dd.style.bottom='';
+  dd.style.width='';
+  dd.style.maxWidth='';
+  dd.style.maxHeight='';
 }
 
 function _readModelOverflowData(group){

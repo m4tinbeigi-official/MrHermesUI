@@ -7814,42 +7814,98 @@ function autoResize(){
     _composerAutoResizeRaf=0;
   }
   const el=$('msg');
-  if(!el) return;
   const _nextValue=String(el.value||'');
-
-  if(!_nextValue){
+  if(typeof CSS!=='undefined'&&typeof CSS.supports==='function'&&CSS.supports('field-sizing','content')){
     if(el.style.height) el.style.height='';
-    _composerLastResizeValue='';
+    _composerLastResizeValue=_nextValue;
     updateSendBtn();
     return;
   }
-
-  const _prevH = el.offsetHeight;
-  const _msgs = $('messages');
-  const _prevScrollTop = _msgs ? _msgs.scrollTop : 0;
-
-  // When text is deleted or cleared, reset to base height first to allow shrinking
-  if (_nextValue.length < _composerLastResizeValue.length) {
-    el.style.height = '48px';
+  const _isAppendOnly=_nextValue.length>_composerLastResizeValue.length&&_nextValue.startsWith(_composerLastResizeValue);
+  // An EMPTY composer has no content to measure, so clear any inline height and
+  // let the CSS `min-height` define the resting size. Measuring instead would
+  // read the PLACEHOLDER's scrollHeight — a long busy/compression hint wraps to
+  // two or three lines and would grow the empty composer (71px for the English
+  // busy hint, 97px for the French compression one) purely because of hint text.
+  // That made the empty height history-dependent on this path: 44px on a fresh
+  // send, but grown after any later resize while empty. The native
+  // `field-sizing` path above always holds the resting height, so clearing here
+  // keeps both paths on the same contract.
+  if(!_nextValue){
+    if(el.style.height) el.style.height='';
+    _composerLastResizeValue=_nextValue;
+    updateSendBtn();
+    return;
   }
-
-  // Calculate target height bounded between 48px and 220px without transient collapse
-  const targetH = Math.min(Math.max(el.scrollHeight, 48), 220);
-  const targetPx = targetH + 'px';
-  if (el.style.height !== targetPx) {
-    el.style.height = targetPx;
+  const _fitsCurrentHeight=el.scrollHeight<=el.offsetHeight;
+  // Only a direct append at the natural one-row height can skip the height
+  // round trip. Replacements and an already-tall composer must remeasure so the
+  // textarea can shrink back to its natural height.
+  // Parse min-height with a STRICT finite-pixel check: getComputedStyle can
+  // return a non-px value (e.g. a percentage `min-height`) that parseFloat would
+  // read as a bogus pixel number (parseFloat("50%")===50), which would wrongly
+  // enable the fast path and leave the composer stuck tall. Reject anything that
+  // is not exactly "<number>px" so those cases fail closed to the full resize.
+  const _composerStyle=_isAppendOnly&&_fitsCurrentHeight?getComputedStyle(el):null;
+  const _composerPx=(raw)=>/^(?:\d+(?:\.\d+)?|\.\d+)px$/.test(raw==null?'':String(raw))?parseFloat(raw):NaN;
+  const _minHeightRaw=_composerStyle?_composerStyle.minHeight:'';
+  const _minHeight=_composerPx(_minHeightRaw);
+  // The ONE-ROW height the composer naturally settles at is line-height +
+  // vertical padding + borders (~48px at the stock font), which is TALLER than
+  // the CSS min-height (44px). Comparing el.offsetHeight against min-height
+  // alone therefore never matched in a real browser, so this skip was dead code
+  // and EVERY append keystroke paid the height:'auto' round trip below — and
+  // that scrollHeight read forces a synchronous layout of the whole document,
+  // transcript included. The cost grows with the rendered transcript: on a
+  // 758-message transcript (31k DOM nodes) a keystroke measured ~168ms median
+  // echo latency at 6x CPU throttle vs 72ms with the transcript detached.
+  // Accept the natural one-row height too; an oversized composer still takes the
+  // full resize because its offsetHeight exceeds that ceiling by far.
+  const _lineHeight=_composerStyle?_composerPx(_composerStyle.lineHeight):NaN;
+  const _naturalRowHeight=Number.isFinite(_lineHeight)
+    ?_lineHeight+(_composerPx(_composerStyle.paddingTop)||0)+(_composerPx(_composerStyle.paddingBottom)||0)
+      +(_composerPx(_composerStyle.borderTopWidth)||0)+(_composerPx(_composerStyle.borderBottomWidth)||0)
+    :NaN;
+  const _rowCeiling=Number.isFinite(_naturalRowHeight)&&Number.isFinite(_minHeight)?Math.max(_minHeight,_naturalRowHeight):_minHeight;
+  const _isAtMinimumHeight=Number.isFinite(_rowCeiling)&&el.offsetHeight<=Math.ceil(_rowCeiling)+1;
+  if(_isAppendOnly&&_fitsCurrentHeight&&_isAtMinimumHeight){
+    _composerLastResizeValue=_nextValue;
+    updateSendBtn();
+    return;
   }
-
-  _composerLastResizeValue = _nextValue;
-  if(_msgs && _msgs.scrollTop !== _prevScrollTop) {
-    _msgs.scrollTop = _prevScrollTop;
-  }
+  const _prevComposerH=el.offsetHeight;
+  // #5514: autoResize() momentarily sets the textarea to height:'auto' (collapses
+  // a multi-row composer toward its 1-row min) before reading scrollHeight and
+  // restoring the measured height. That transient collapse GROWS the flex:1
+  // #messages viewport, and reading scrollHeight forces a synchronous reflow — so
+  // the browser CLAMPS a bottom-anchored scrollTop DOWN by the collapse delta and
+  // does NOT restore it when the height snaps back. The reader is left stranded
+  // Δpx above the bottom on EVERY keystroke while the composer is multi-row (Δ ∝
+  // composer height), and the clamp's async scroll event also sticky-unpins the
+  // reader (_messageUserUnpinned=true), dead-ending the grow-path re-pin below and
+  // stream auto-follow until they manually scroll back. #5516's net-growth gate
+  // never caught this because a steady-state keystroke has no NET height change.
+  // Root-cause fix: snapshot the transcript's scrollTop BEFORE the height
+  // round-trip and restore it AFTER, undoing the transient clamp within the same
+  // synchronous task so the poisoning scroll event never fires. This protects
+  // pinned readers AND near-bottom readers who scrolled up to re-read (their exact
+  // position is preserved), takes no _programmaticScroll latch, and is inert to
+  // iOS dynamic-toolbar reflows. A genuine NET grow/shrink still lands the reader
+  // Δnet off-bottom; the grow-gated re-pin below (and the #composerWrap
+  // ResizeObserver) then snap a still-pinned reader to the true bottom.
+  const _msgs=$('messages');
+  const _prevScrollTop=_msgs?_msgs.scrollTop:0;
+  el.style.height='auto';
+  el.style.height=Math.min(el.scrollHeight,200)+'px';
+  _composerLastResizeValue=_nextValue;
+  if(_msgs&&_msgs.scrollTop!==_prevScrollTop) _msgs.scrollTop=_prevScrollTop;
   updateSendBtn();
-
-  // Re-pin transcript smoothly only when composer truly expands by more than 4px
-  if(el.offsetHeight > _prevH + 4 && typeof _repinMessagesAfterComposerResize === 'function') {
-    _repinMessagesAfterComposerResize();
-  }
+  // Genuine NET growth (a new row that keeps the composer taller than before)
+  // still shrinks the settled viewport, so a pinned reader must be re-pinned to
+  // the true bottom. Guarded to fire only on real growth and only when genuinely
+  // pinned (the helper no-ops for a scrolled-away reader). The #composerWrap
+  // ResizeObserver is the safety net for growth paths that don't route here.
+  if(el.offsetHeight>_prevComposerH && typeof _repinMessagesAfterComposerResize==='function') _repinMessagesAfterComposerResize();
 }
 function scheduleComposerAutoResize(){
   if(typeof requestAnimationFrame!=='function'){autoResize();return;}
